@@ -1,6 +1,7 @@
 // reference the canvas and set its size
 const carCanvas = document.getElementById('carCanvas')
 const networkCanvas = document.getElementById('networkCanvas')
+const numberOfTrafficCars = 400 //TODO
 const laneCount = 3 //TODO
 const canvasWidth = 500 //TODO
 
@@ -37,7 +38,8 @@ const traffic = generateTraffic()
 function generateTraffic() {
   let distance = 300
   let traffic = []
-  for (let i = 0; i < 400; i++) {
+
+  for (let i = 0; i < numberOfTrafficCars; i++) {
     traffic.push(
       new Car(
         road.getLaneCenter(Math.floor(Math.random() * laneCount)),
