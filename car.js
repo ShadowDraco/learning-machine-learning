@@ -1,154 +1,182 @@
 const colors = ['red', 'green', 'yellow', 'orange', 'brown', 'white', 'gray']
 
 class Car {
-	constructor(x, y, w, h, maxSpeed, controlType, color) {
-		this.x = x
-		this.y = y
-		this.width = w
-		this.height = h
+  constructor(x, y, w, h, maxSpeed, controlType, color, index) {
+    this.x = x
+    this.y = y
+    this.width = w
+    this.height = h
+    this.index = index
 
-		this.speed = 0
-		this.maxSpeed = maxSpeed
-		this.friction = 0.03
-		this.accel = 0.1
-		this.angle = 0
+    this.speed = 0
+    this.maxSpeed = maxSpeed
+    this.friction = 0.05
+    this.accel = 0.1
+    this.angle = 0
 
-		this.damaged = false
+    this.damaged = false
 
-		color === 'random'
-			? (this.color = colors[Math.round(Math.random() * colors.length - 1)])
-			: (this.color = color)
+    this.beingFollowed = false
 
-		if (controlType === 'PC') {
-			this.sensor = new Sensor(this)
-		}
+    this.useBrain = controlType == 'AI'
 
-		this.controls = new Controls(controlType)
-	}
+    color === 'random'
+      ? (this.color = colors[Math.round(Math.random() * colors.length - 1)])
+      : (this.color = color)
 
-	update(roadBorders, traffic) {
-		// MOVEMENT
-		if (!this.damaged) {
-			this.#handleControls()
-			this.#capSpeed()
-			this.#applyFriction()
-			this.#applyVelocity()
+    if (controlType !== 'NPC') {
+      this.sensor = new Sensor(this)
+      if (this.useBrain)
+        // one hidden layer for processing and one for outputs like forward backwards
+        this.brain = new NeuralNetwork([this.sensor.rayCount, 6, 6, 4])
+    }
 
-			// Collisions
-			this.polygon = this.#createPolygon()
-			this.damaged = this.#assessDamage(roadBorders, traffic)
-		}
+    this.controls = new Controls(controlType)
+  }
 
-		if (this.sensor) {
-			this.sensor.update(roadBorders, traffic)
-		}
-	}
+  update(roadBorders, traffic) {
+    // MOVEMENT
+    if (!this.damaged) {
+      this.#handleControls()
+      this.#capSpeed()
+      this.#applyFriction()
+      this.#applyVelocity()
 
-	#assessDamage(roadBorders, traffic) {
-		let collision = false
-		roadBorders.forEach(border => {
-			if (polysIntersect(this.polygon, border)) {
-				collision = true
-			}
-		})
+      // Collisions
+      this.polygon = this.#createPolygon()
+      this.damaged = this.#assessDamage(roadBorders, traffic)
+    }
 
-		traffic.forEach(car => {
-			if (polysIntersect(this.polygon, car.polygon)) {
-				collision = true
-			}
-		})
+    if (this.sensor) {
+      this.sensor.update(roadBorders, traffic)
 
-		return collision
-	}
+      if (this.useBrain) {
+        // s = sensor
+        // we want the value to be returned as a value that is higher when an object is closer
+        // this increases the weight
+        const offsets = this.sensor.readings.map(s =>
+          s == null ? 0 : 1 - s.offset
+        )
 
-	// help track the positions of things that are moving on the canvas
-	#createPolygon() {
-		const points = []
-		// get the radius to find the positions of corners
-		const rad = Math.hypot(this.width, this.height) / 2
-		// use the arc tangent to get the angle knowing the width and the height
-		const alpha = Math.atan2(this.width, this.height)
-		// top left
-		points.push({
-			x: this.x - Math.sin(this.angle - alpha) * rad,
-			y: this.y - Math.cos(this.angle - alpha) * rad,
-		})
+        const outputs = NeuralNetwork.feedForward(offsets, this.brain)
 
-		// top right
-		points.push({
-			x: this.x - Math.sin(this.angle + alpha) * rad,
-			y: this.y - Math.cos(this.angle + alpha) * rad,
-		})
+        this.controls.forward = outputs[0]
+        this.controls.left = outputs[1]
+        this.controls.right = outputs[2]
+        this.controls.reverse = outputs[3]
+      }
+    }
+  }
 
-		// bottom left
-		points.push({
-			x: this.x - Math.sin(Math.PI + this.angle - alpha) * rad,
-			y: this.y - Math.cos(Math.PI + this.angle - alpha) * rad,
-		})
+  #assessDamage(roadBorders, traffic) {
+    let collision = false
+    roadBorders.forEach(border => {
+      if (polysIntersect(this.polygon, border)) {
+        collision = true
+      }
+    })
 
-		// bottom right
-		points.push({
-			x: this.x - Math.sin(Math.PI + this.angle + alpha) * rad,
-			y: this.y - Math.cos(Math.PI + this.angle + alpha) * rad,
-		})
+    traffic.forEach(car => {
+      if (polysIntersect(this.polygon, car.polygon)) {
+        collision = true
+      }
+    })
 
-		return points
-	}
+    return collision
+  }
 
-	#applyVelocity = () => {
-		// apply velocity based on rotation
-		this.x -= Math.sin(this.angle) * this.speed
-		this.y -= Math.cos(this.angle) * this.speed
-	}
+  // help track the positions of things that are moving on the canvas
+  #createPolygon() {
+    const points = []
+    // get the radius to find the positions of corners
+    const rad = Math.hypot(this.width, this.height) / 2
+    // use the arc tangent to get the angle knowing the width and the height
+    const alpha = Math.atan2(this.width, this.height)
+    // top left
+    points.push({
+      x: this.x - Math.sin(this.angle - alpha) * rad,
+      y: this.y - Math.cos(this.angle - alpha) * rad,
+    })
 
-	#handleControls = () => {
-		if (this.controls.forward) {
-			this.speed += this.accel
-		}
-		if (this.controls.reverse) {
-			this.speed -= this.accel
-		}
+    // top right
+    points.push({
+      x: this.x - Math.sin(this.angle + alpha) * rad,
+      y: this.y - Math.cos(this.angle + alpha) * rad,
+    })
 
-		if (this.speed != 0) {
-			const flip = this.speed > 0 ? 1 : -1
-			// if the flip is 1 nothing happens, otherwise signs are flipped to simulate proper driving
-			if (this.controls.left) {
-				this.angle += 0.03 * flip
-			}
-			if (this.controls.right) {
-				this.angle -= 0.03 * flip
-			}
-		}
-	}
+    // bottom left
+    points.push({
+      x: this.x - Math.sin(Math.PI + this.angle - alpha) * rad,
+      y: this.y - Math.cos(Math.PI + this.angle - alpha) * rad,
+    })
 
-	#capSpeed = () => {
-		this.speed > this.maxSpeed ? (this.speed = this.maxSpeed) : ''
-		this.speed < -this.maxSpeed ? (this.speed = -this.maxSpeed) : ''
-	}
+    // bottom right
+    points.push({
+      x: this.x - Math.sin(Math.PI + this.angle + alpha) * rad,
+      y: this.y - Math.cos(Math.PI + this.angle + alpha) * rad,
+    })
 
-	#applyFriction = () => {
-		if (this.speed > 0) {
-			this.speed -= this.friction
-		}
-		if (this.speed < 0) {
-			this.speed += this.friction
-		}
+    return points
+  }
 
-		// if speed is less than friction set speed to 0 to prevent sliding
-		Math.abs(this.speed) < this.friction ? (this.speed = 0) : ''
-	}
+  #applyVelocity = () => {
+    // apply velocity based on rotation
+    this.x -= Math.sin(this.angle) * this.speed
+    this.y -= Math.cos(this.angle) * this.speed
+  }
 
-	draw(ctx) {
-		if (this.damaged) {
-			ctx.fillStyle = 'gray'
-		} else {
-			ctx.fillStyle = this.color
-		}
-		if (this.sensor) {
-			this.sensor.draw(ctx)
-		}
+  #handleControls = () => {
+    if (this.controls.forward) {
+      this.speed += this.accel
+    }
+    if (this.controls.reverse) {
+      this.speed -= this.accel
+    }
 
-		/* 
+    if (this.speed != 0) {
+      const flip = this.speed > 0 ? 1 : -1
+      // if the flip is 1 nothing happens, otherwise signs are flipped to simulate proper driving
+      if (this.controls.left) {
+        this.angle += 0.03 * flip
+      }
+      if (this.controls.right) {
+        this.angle -= 0.03 * flip
+      }
+    }
+  }
+
+  #capSpeed = () => {
+    this.speed > this.maxSpeed ? (this.speed = this.maxSpeed) : ''
+    this.speed < -this.maxSpeed ? (this.speed = -this.maxSpeed) : ''
+  }
+
+  #applyFriction = () => {
+    if (this.speed > 0) {
+      this.speed -= this.friction
+    }
+    if (this.speed < 0) {
+      this.speed += this.friction
+    }
+
+    // if speed is less than friction set speed to 0 to prevent sliding
+    Math.abs(this.speed) < this.friction ? (this.speed = 0) : ''
+  }
+
+  draw(ctx) {
+    if (this.damaged) {
+      ctx.fillStyle = 'gray'
+    } else {
+      !this.beingFollowed
+        ? (ctx.fillStyle = this.color)
+        : (ctx.fillStyle = 'purple')
+    }
+    if (this.sensor) {
+      if (this.beingFollowed) {
+        this.sensor.draw(ctx)
+      }
+    }
+
+    /* 
 		// save context
 		ctx.save()
 		// rotate with translations
@@ -156,14 +184,14 @@ class Car {
 		ctx.rotate(-this.angle)
 
         */
-		ctx.beginPath()
+    ctx.beginPath()
 
-		ctx.moveTo(this.polygon[0].x, this.polygon[0].y)
-		this.polygon.forEach(point => {
-			ctx.lineTo(point.x, point.y)
-		})
+    ctx.moveTo(this.polygon[0].x, this.polygon[0].y)
+    this.polygon.forEach(point => {
+      ctx.lineTo(point.x, point.y)
+    })
 
-		/*
+    /*
         ctx.rect(
 			// remove coordinates because the position is already translated ^
 			>this.x< -this.width / 2,
@@ -171,9 +199,9 @@ class Car {
 			this.width,
 			this.height)
         */
-		ctx.fill()
+    ctx.fill()
 
-		/*// restore the context to the save point so it doesn't continually translate and rotate!
+    /*// restore the context to the save point so it doesn't continually translate and rotate!
 		ctx.restore()*/
-	}
+  }
 }
