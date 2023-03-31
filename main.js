@@ -1,8 +1,8 @@
 // reference the canvas and set its size
 const carCanvas = document.getElementById('carCanvas')
 const networkCanvas = document.getElementById('networkCanvas')
-const laneCount = 3
-const canvasWidth = 500
+const laneCount = 3 //TODO
+const canvasWidth = 500 //TODO
 
 carCanvas.width = canvasWidth - 8 * laneCount
 networkCanvas.width = canvasWidth * 1.2
@@ -15,8 +15,7 @@ const networkCtx = networkCanvas.getContext('2d')
 const road = new Road(carCanvas.width / 2, carCanvas.width * 0.9, laneCount)
 // create a bunch of cars
 
-//TODO
-const N = 200
+const N = 200 //TODO
 const cars = generateCars(N)
 
 //track the best car
